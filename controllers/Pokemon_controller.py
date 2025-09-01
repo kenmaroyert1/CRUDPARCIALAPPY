@@ -1,14 +1,13 @@
 from flask import Blueprint, request, jsonify
-from services.Pokemon_service import PokemonService
-
-# Definir el Blueprint
-pokemon_bp = Blueprint('pokemon_bp', __name__)
+from services.pokemon_service import PokemonService
 
 # Importar la sesión de la base de datos desde config/database.py
 from config.database import get_db_session
 
-# Instancia global del servicio
+# Instancia global de servicio (en producción usar contexto de app o request)
 service = PokemonService(get_db_session())
+
+pokemon_bp = Blueprint('pokemon_bp', __name__)
 
 
 @pokemon_bp.route('/pokemons', methods=['GET'])
@@ -16,22 +15,13 @@ def get_pokemons():
     """
     GET /pokemons
     Recupera y retorna todos los Pokémon registrados en el sistema.
+    Utiliza la capa de servicios para obtener la lista completa de Pokémon.
+    No recibe parámetros.
+    Respuesta: JSON con la lista de Pokémon.
     """
-    pokemons = service.listar_pokemones()
+    pokemons = service.listar_pokemons()
     return jsonify([
-        {
-            'id': p.id,
-            'name': p.name,
-            'type1': p.type1,
-            'type2': p.type2,
-            'total': p.total,
-            'hp': p.hp,
-            'attack': p.attack,
-            'defense': p.defense,
-            'sp_atk': p.sp_atk,
-            'sp_def': p.sp_def,
-            'speed': p.speed
-        }
+        {'id': p.id, 'name': p.name, 'type': p.type, 'generation': p.generation}
         for p in pokemons
     ]), 200
 
@@ -41,21 +31,17 @@ def get_pokemon(pokemon_id):
     """
     GET /pokemons/<pokemon_id>
     Recupera la información de un Pokémon específico por su ID.
+    Parámetros:
+        pokemon_id (int): ID del Pokémon a consultar (en la URL).
+    Respuesta: JSON con los datos del Pokémon o 404 si no existe.
     """
     pokemon = service.obtener_pokemon(pokemon_id)
     if pokemon:
         return jsonify({
             'id': pokemon.id,
             'name': pokemon.name,
-            'type1': pokemon.type1,
-            'type2': pokemon.type2,
-            'total': pokemon.total,
-            'hp': pokemon.hp,
-            'attack': pokemon.attack,
-            'defense': pokemon.defense,
-            'sp_atk': pokemon.sp_atk,
-            'sp_def': pokemon.sp_def,
-            'speed': pokemon.speed
+            'type': pokemon.type,
+            'generation': pokemon.generation
         }), 200
     return jsonify({'error': 'Pokémon no encontrado'}), 404
 
@@ -65,36 +51,26 @@ def create_pokemon():
     """
     POST /pokemons
     Crea un nuevo Pokémon.
-    Parámetros esperados (JSON): name, type1, type2, total, hp, attack, defense, sp_atk, sp_def, speed
+    Parámetros esperados (JSON):
+        name (str): Nombre del Pokémon.
+        type (str): Tipo del Pokémon.
+        generation (int): Generación a la que pertenece.
+    Respuesta: JSON con los datos del Pokémon creado.
     """
     data = request.get_json()
     name = data.get('name')
-    type1 = data.get('type1')
-    type2 = data.get('type2')
-    total = data.get('total')
-    hp = data.get('hp')
-    attack = data.get('attack')
-    defense = data.get('defense')
-    sp_atk = data.get('sp_atk')
-    sp_def = data.get('sp_def')
-    speed = data.get('speed')
+    type_ = data.get('type')
+    generation = data.get('generation')
 
-    if not name or not type1 or hp is None or attack is None:
-        return jsonify({'error': 'Faltan datos obligatorios'}), 400
+    if not name or not type_ or generation is None:
+        return jsonify({'error': 'Nombre, tipo y generación son obligatorios'}), 400
 
-    pokemon = service.crear_pokemon(name, type1, type2, total, hp, attack, defense, sp_atk, sp_def, speed)
+    pokemon = service.crear_pokemon(name, type_, generation)
     return jsonify({
         'id': pokemon.id,
         'name': pokemon.name,
-        'type1': pokemon.type1,
-        'type2': pokemon.type2,
-        'total': pokemon.total,
-        'hp': pokemon.hp,
-        'attack': pokemon.attack,
-        'defense': pokemon.defense,
-        'sp_atk': pokemon.sp_atk,
-        'sp_def': pokemon.sp_def,
-        'speed': pokemon.speed
+        'type': pokemon.type,
+        'generation': pokemon.generation
     }), 201
 
 
@@ -103,34 +79,25 @@ def update_pokemon(pokemon_id):
     """
     PUT /pokemons/<pokemon_id>
     Actualiza la información de un Pokémon existente.
+    Parámetros:
+        pokemon_id (int): ID del Pokémon a actualizar (en la URL).
+        name (str): Nuevo nombre del Pokémon (en el cuerpo JSON).
+        type (str): Nuevo tipo del Pokémon (en el cuerpo JSON).
+        generation (int): Nueva generación del Pokémon (en el cuerpo JSON).
+    Respuesta: JSON con los datos del Pokémon actualizado o error si no existe.
     """
     data = request.get_json()
-    pokemon = service.actualizar_pokemon(
-        pokemon_id,
-        data.get('name'),
-        data.get('type1'),
-        data.get('type2'),
-        data.get('total'),
-        data.get('hp'),
-        data.get('attack'),
-        data.get('defense'),
-        data.get('sp_atk'),
-        data.get('sp_def'),
-        data.get('speed')
-    )
+    name = data.get('name')
+    type_ = data.get('type')
+    generation = data.get('generation')
+
+    pokemon = service.actualizar_pokemon(pokemon_id, name, type_, generation)
     if pokemon:
         return jsonify({
             'id': pokemon.id,
             'name': pokemon.name,
-            'type1': pokemon.type1,
-            'type2': pokemon.type2,
-            'total': pokemon.total,
-            'hp': pokemon.hp,
-            'attack': pokemon.attack,
-            'defense': pokemon.defense,
-            'sp_atk': pokemon.sp_atk,
-            'sp_def': pokemon.sp_def,
-            'speed': pokemon.speed
+            'type': pokemon.type,
+            'generation': pokemon.generation
         }), 200
     return jsonify({'error': 'Pokémon no encontrado'}), 404
 
@@ -140,6 +107,9 @@ def delete_pokemon(pokemon_id):
     """
     DELETE /pokemons/<pokemon_id>
     Elimina un Pokémon específico por su ID.
+    Parámetros:
+        pokemon_id (int): ID del Pokémon a eliminar (en la URL).
+    Respuesta: JSON con mensaje de éxito o error si no existe.
     """
     pokemon = service.eliminar_pokemon(pokemon_id)
     if pokemon:
